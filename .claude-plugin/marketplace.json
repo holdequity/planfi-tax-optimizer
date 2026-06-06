@@ -1,0 +1,24 @@
+{
+  "name": "planfi",
+  "owner": {
+    "name": "holdequity",
+    "url": "https://github.com/holdequity"
+  },
+  "metadata": {
+    "description": "planfi skills — financial planning and real-estate investment analysis powered by the public planfi MCP.",
+    "version": "1.2.0"
+  },
+  "plugins": [
+    {
+      "name": "tax-optimizer",
+      "source": "./skills/tax-optimizer",
+      "description": "Cut taxes across accounts and years: broad tax optimization (asset location, tax-loss harvesting, charitable), multi-year ISO/conversion timing (AMT/NIIT/IRMAA-aware), Roth conversion ladders, mega-backdoor Roth space, and advanced surtaxes (NIIT/AMT/state). Thin orchestration over the planfi MCP.",
+      "version": "1.0.0",
+      "license": "MIT",
+      "author": {
+        "name": "holdequity",
+        "url": "https://github.com/holdequity"
+      }
+    }
+  ]
+}

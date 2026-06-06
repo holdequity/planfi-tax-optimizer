@@ -1,0 +1,13 @@
+{
+  "name": "tax-optimizer",
+  "version": "1.0.0",
+  "description": "Cut taxes across accounts and years: broad tax optimization (asset location, tax-loss harvesting, charitable), multi-year ISO/conversion timing (AMT/NIIT/IRMAA-aware), Roth conversion ladders, mega-backdoor Roth space, and advanced surtaxes (NIIT/AMT/state). Thin orchestration over the planfi MCP.",
+  "license": "MIT",
+  "author": {
+    "name": "holdequity",
+    "url": "https://planfi.app"
+  },
+  "homepage": "https://github.com/holdequity/planfi-tax-optimizer",
+  "repository": "https://github.com/holdequity/planfi-tax-optimizer",
+  "keywords": ["tax", "roth-conversion", "amt", "niit", "backdoor-roth", "tax-optimization"]
+}
