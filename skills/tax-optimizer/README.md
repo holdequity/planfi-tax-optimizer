@@ -1,6 +1,6 @@
 # tax-optimizer (Claude Agent Skill)
 
-Cut taxes across accounts and years: broad tax optimization (asset location, tax-loss harvesting, charitable), multi-year ISO/conversion timing (AMT/NIIT/IRMAA-aware), Roth conversion ladders, mega-backdoor Roth space, advanced surtaxes (NIIT/AMT/state), and retirement relocation / state-tax arbitrage (compare the lifetime after-tax cost of retiring in state A vs B). Thin orchestration over the planfi MCP.
+Cut taxes across accounts and years: broad tax optimization (asset location, tax-loss harvesting, charitable), multi-year ISO/conversion timing (AMT/NIIT/IRMAA-aware), Roth conversion ladders, mega-backdoor Roth space, advanced surtaxes (NIIT/AMT/state), tax-gain harvesting (how much long-term gain you can realize at the 0% capital-gains rate before NIIT/IRMAA bites), and retirement relocation / state-tax arbitrage (compare the lifetime after-tax cost of retiring in state A vs B). Thin orchestration over the planfi MCP.
 
 > **Retirement relocation:** *"I'm retiring in California but thinking about Texas — $80k of IRA
 > withdrawals, $40k Social Security, a $600k house, ~$60k spend. Worth the move?"* →

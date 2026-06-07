@@ -12,7 +12,7 @@
     {
       "name": "tax-optimizer",
       "source": "./skills/tax-optimizer",
-      "description": "Cut taxes across accounts and years: broad tax optimization (asset location, tax-loss harvesting, charitable), multi-year ISO/conversion timing (AMT/NIIT/IRMAA-aware), Roth conversion ladders, mega-backdoor Roth space, advanced surtaxes (NIIT/AMT/state), and retirement relocation / state-tax arbitrage (compare the lifetime after-tax cost of retiring in one state vs another). Thin orchestration over the planfi MCP.",
+      "description": "Cut taxes across accounts and years: broad tax optimization (asset location, tax-loss harvesting, charitable), multi-year ISO/conversion timing (AMT/NIIT/IRMAA-aware), Roth conversion ladders, mega-backdoor Roth space, advanced surtaxes (NIIT/AMT/state), tax-gain harvesting (how much long-term gain you can realize at the 0% capital-gains rate before NIIT/IRMAA bites), and retirement relocation / state-tax arbitrage (compare the lifetime after-tax cost of retiring in one state vs another). Thin orchestration over the planfi MCP.",
       "version": "1.0.0",
       "license": "MIT",
       "author": {
