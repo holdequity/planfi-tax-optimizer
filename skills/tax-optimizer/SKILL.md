@@ -1,7 +1,7 @@
 ---
 name: tax-optimizer
-version: 1.0.0
-description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, or check NIIT / AMT / state surtax exposure — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?".
+version: 1.1.0
+description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, or weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
 ---
 
 # Tax Optimizer
@@ -14,7 +14,7 @@ tools — it does **not** compute anything locally and bakes in no defaults of i
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_optimization`):
 `analyze_tax_optimization`, `optimize_multi_year_tax`, `analyze_roth_conversion`,
-`analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, plus optional `generate_financial_plan`
+`analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_relocation`, plus optional `generate_financial_plan`
 (for `plan_id` chaining + a `share_url`). Use whichever name your environment exposes (bare or
 `mcp__planfi__`-prefixed); below they are written bare.
 
@@ -29,7 +29,7 @@ claude mcp add --transport http planfi https://ai.planfi.app/mcp
 ## Step 1 — (Optional) build a plan first to chain context + get a share link
 
 If the user has (or wants) a full household model, call **`generate_financial_plan`** once and
-**capture the returned `plan_id`**. All five tax tools accept `{ plan_id }` (plus inline overrides),
+**capture the returned `plan_id`**. All six tools in this skill accept `{ plan_id }` (plus inline overrides),
 so they can resolve balances, income, age, and filing status from the saved plan instead of you
 re-sending every figure. `generate_financial_plan` also returns a **`share_url`** (planfi.app) —
 the tax tools themselves do **not** emit a share link, so this is the way to give the user one.
@@ -98,26 +98,49 @@ REQUIRED: `ordinary_taxable_income`. Optional: `net_investment_income`, `magi` (
 `iso_bargain_element` (AMT), `state_flat_rate`, `filing_status`. Good as a sanity check after a Roth
 conversion or ISO exercise.
 
+### "Should I retire in / move to a lower-tax state?" → `analyze_relocation`
+Lifetime after-tax comparison of state A vs B: state income tax, capital-gains, retirement-income &
+Social-Security taxation, property tax, state estate tax, plus a cost-of-living delta. Returns the
+annual + lifetime difference, a one-time estate-tax delta, and a `move` / `stay` / `marginal`
+recommendation with the dominant driver named.
+REQUIRED: `from_state`, `to_state` (two-letter codes). Optional: `annual_retirement_income`,
+`social_security_income`, `annual_capital_gains`, `annual_spend` (at COL index 100),
+`real_estate_value`, `filing_status`, `life_expectancy` (sets the horizon), `tax_year`, plus
+`overrides` for flat-rate states without a bracket table (CA/NY/MA have tables; PA/CO/etc. need a
+flat rate, else their income tax is reported as $0 with an assumption note). Federal income & estate
+tax are state-invariant and excluded from the delta; figures are real-dollar, undiscounted.
+
+Unlike the other five tax tools, `analyze_relocation` **does** emit a structured `assumed_defaults[]`
+array (every state-profile fallback it applied — no-SS-tax, $0 retirement-income exclusion, default
+property rate, the 85% Social-Security convention) and a **`share_url`** when you pass `{ plan_id }`.
+Read back the `assumed_defaults[]` and offer the link. Because this is a near-retiree decision, pair
+it with the **`retirement-income`** skill (`analyze_withdrawal_strategy`, `optimize_social_security`,
+`analyze_estate_exposure`) for the full decumulation picture once the state is chosen.
+
 ## Step 3 — Surface results honestly
 
 For whichever tool you called:
 - **Lead with the headline dollar figure** — annual tax savings, per-year conversion amounts +
   lifetime RMD tax avoided, AMT/NIIT crossover, remaining after-tax space, total surtax bite.
-- **Read back `disclosures.key_assumptions`** verbatim. These tools do **not** emit a structured
-  `assumed_defaults[]` array — instead they apply silent Zod defaults (e.g. ordinary rate 0.24,
-  cap-gains 0.15, bond allocation 0.2, standard deduction $29,200; Roth target bracket 0.12, RMD age
-  73, life expectancy 92) and expose what they assumed only as **prose in
-  `disclosures.key_assumptions`**. Surface those so the user can correct any silent assumption.
+- **Read back the assumptions verbatim.** The five tax-optimization tools (`analyze_tax_optimization`,
+  `optimize_multi_year_tax`, `analyze_roth_conversion`, `analyze_mega_backdoor_roth`,
+  `analyze_advanced_taxes`) do **not** emit a structured `assumed_defaults[]` array — they apply
+  silent Zod defaults (e.g. ordinary rate 0.24, cap-gains 0.15, bond allocation 0.2, standard
+  deduction $29,200; Roth target bracket 0.12, RMD age 73, life expectancy 92) and expose what they
+  assumed only as **prose in `disclosures.key_assumptions`**. `analyze_relocation` is the exception:
+  it returns a structured **`assumed_defaults[]`** (read each one back). Either way, surface the
+  assumptions so the user can correct any silent default.
 - Honor `disclosures.not_advice` — present as planning estimates, not tax advice.
 - **Follow `next_actions[]`** — each is `{ tool, why, prefilled_args }` (carrying `{ plan_id }`
   when available). Use these server-suggested chains rather than guessing the next call.
-- **For a share link:** the tax tools don't return one. If the user wants a sharable plan, run
-  `generate_financial_plan` (Step 1) and surface its `share_url`.
+- **For a share link:** the five tax-optimization tools don't return one. `analyze_relocation` does
+  return a `share_url` when called with `{ plan_id }`. Otherwise, run `generate_financial_plan`
+  (Step 1) and surface its `share_url`.
 
 ## Recommended call sequence (typical session)
 
 1. (optional) `generate_financial_plan` → capture `plan_id` (+ `share_url`).
-2. Route by intent → one of the five tax tools (with `{ plan_id }` or raw fields).
+2. Route by intent → one of the six tools (with `{ plan_id }` or raw fields).
 3. Read back the headline + `disclosures.key_assumptions`.
 4. Follow `next_actions[]` (often chains into another tax tool, the retirement-income
    `analyze_healthcare_bridge`, or `generate_financial_plan` for a share link).
@@ -136,16 +159,27 @@ conversion_start_age: 60, conversion_end_age: 70, target_bracket_rate: 0.12, fil
 "married_joint" })`. Lead with per-year conversion + lifetime RMD tax avoided; flag the MAGI/ACA
 interaction and suggest `analyze_healthcare_bridge` if pre-65.
 
-*(Both examples use fictional figures — never reuse a real user's numbers in documentation.)*
+**3.** *"We're retiring in California but thinking about Texas — $80k of IRA withdrawals, $40k Social
+Security, a $600k house, ~$60k spend. Worth the move?"* → `analyze_relocation({ from_state: "CA",
+to_state: "TX", annual_retirement_income: 80000, social_security_income: 40000, real_estate_value:
+600000, annual_spend: 60000, filing_status: "married_joint" })`. Lead with the total lifetime
+advantage and the `move`/`stay`/`marginal` call; name the dominant driver (often state income tax or
+COL). Read back the assumptions (esp. the 85% Social-Security convention and any no-table state).
+
+*(All examples use fictional figures — never reuse a real user's numbers in documentation.)*
 
 ## Notes
 
 - All decimals are fractions; all dollars are today's (real) dollars; brackets/limits are ~2026
   (override `tax_year` as needed).
 - Pass `{ plan_id }` to reuse a saved household model; any field you also pass is a shallow override.
-- These five tools surface assumptions as **prose in `disclosures.key_assumptions`**, not a
-  structured `assumed_defaults[]`, and they do **not** return a `share_url` — chain
+- The five tax-optimization tools surface assumptions as **prose in `disclosures.key_assumptions`**,
+  not a structured `assumed_defaults[]`, and they do **not** return a `share_url` — chain
   `generate_financial_plan` for a sharable link. (Server follow-up tracked in `SKILL_AUTHORING.md`.)
+  `analyze_relocation` is the exception: it emits a structured `assumed_defaults[]` and a `share_url`
+  (with `plan_id`).
+- Near-retiree weighing a move? Pair this with the **`retirement-income`** skill for the
+  decumulation side (withdrawal order, Social Security claiming age, estate-tax exposure).
 - Self-employed / S-corp owner? The **`self-employed-planner`** skill sizes Solo 401(k) / SEP / SIMPLE
   room, the §199A QBI deduction, and the S-corp reasonable-salary tradeoff.
 - Not financial or tax advice. Planning estimates only.
