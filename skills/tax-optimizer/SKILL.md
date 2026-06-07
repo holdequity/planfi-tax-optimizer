@@ -28,6 +28,8 @@ claude mcp add --transport http planfi https://ai.planfi.app/mcp
 
 ## Step 1 — (Optional) build a plan first to chain context + get a share link
 
+> **Feed it into the forecast (not just plan_id chaining):** `generate_financial_plan` now accepts `gain_harvesting` directly as a plan input, so it flows into net worth, FIRE %, and Monte-Carlo backtesting — the 0%-LTCG harvest is applied as a one-time tax effect. Use the standalone analyze tool below for a focused what-if; pass `gain_harvesting` into the plan to see its effect on the whole household forecast.
+
 If the user has (or wants) a full household model, call **`generate_financial_plan`** once and
 **capture the returned `plan_id`**. All seven tools in this skill accept `{ plan_id }` (plus inline overrides),
 so they can resolve balances, income, age, and filing status from the saved plan instead of you
