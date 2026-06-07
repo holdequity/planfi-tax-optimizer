@@ -146,4 +146,6 @@ interaction and suggest `analyze_healthcare_bridge` if pre-65.
 - These five tools surface assumptions as **prose in `disclosures.key_assumptions`**, not a
   structured `assumed_defaults[]`, and they do **not** return a `share_url` — chain
   `generate_financial_plan` for a sharable link. (Server follow-up tracked in `SKILL_AUTHORING.md`.)
+- Self-employed / S-corp owner? The **`self-employed-planner`** skill sizes Solo 401(k) / SEP / SIMPLE
+  room, the §199A QBI deduction, and the S-corp reasonable-salary tradeoff.
 - Not financial or tax advice. Planning estimates only.
