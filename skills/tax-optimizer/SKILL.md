@@ -9,6 +9,8 @@ description: Cut taxes across accounts and years by orchestrating the public pla
 A thin orchestration layer over the **planfi MCP** (https://ai.planfi.app/mcp, public, no auth).
 All tax math, brackets, and limits live server-side. This skill only gathers inputs and calls the
 tools — it does **not** compute anything locally and bakes in no defaults of its own. Read-only.
+Every tool returns a structured **`assumed_defaults[]`** array (`{ field, assumed_value, note }`)
+listing each input it had to assume — always read these back to the user.
 
 ## Step 0 — Make sure the planfi tools are connected
 
@@ -33,8 +35,10 @@ claude mcp add --transport http planfi https://ai.planfi.app/mcp
 If the user has (or wants) a full household model, call **`generate_financial_plan`** once and
 **capture the returned `plan_id`**. All seven tools in this skill accept `{ plan_id }` (plus inline overrides),
 so they can resolve balances, income, age, and filing status from the saved plan instead of you
-re-sending every figure. `generate_financial_plan` also returns a **`share_url`** (planfi.app) —
-the tax tools themselves do **not** emit a share link, so this is the way to give the user one.
+re-sending every figure. Every tax tool also returns a **`share_url`** (planfi.app) **when you pass
+a `plan_id` that resolves a saved household** — without a `plan_id` there is no plan to share, so no
+`share_url` is emitted. `generate_financial_plan` is the way to mint a `plan_id` (and its own
+`share_url`) when the session has no model yet.
 
 This step is optional: every tax tool runs cold from raw inputs too. Prefer the plan path when the
 session already has a model or the user wants a sharable artifact.
@@ -47,8 +51,8 @@ session already has a model or the user wants a sharable artifact.
 
 Pick the tool that matches what the user is asking. Pass `{ plan_id }` when you have one; otherwise
 pass the raw fields below. **Every field is optional with a sensible server default** unless marked
-REQUIRED — so the tools run even from sparse input (the assumptions are reported back as prose, see
-Step 3).
+REQUIRED — so the tools run even from sparse input (every assumption is reported back in the
+structured `assumed_defaults[]` array, see Step 3).
 
 ### "Lower my taxes broadly" → `analyze_tax_optimization`
 Asset location + tax-loss harvesting + charitable bunching/QCD, with quantified annual $ savings.
@@ -77,8 +81,9 @@ REQUIRED: `traditional_balance`, `current_age`. Optional: `conversion_start_age`
 `conversion_end_age`, `target_bracket_rate`, `birth_year` (sets RMD start age 73 vs 75),
 `filing_status`, `other_taxable_income`, `state_flat_rate`, `life_expectancy`. ISO/NIIT layering via
 `enable_amt` + `iso_bargain_element`, `enable_niit` + `net_investment_income`. Conversions raise
-MAGI — flag the ACA-subsidy interaction and suggest chaining to `analyze_healthcare_bridge`
-(retirement-income skill) for pre-65 retirees.
+MAGI — flag the ACA-subsidy interaction and point pre-65 retirees to the retirement-income skill's
+`analyze_healthcare_bridge` (this is your own suggestion, not a server `next_actions` edge — those
+chain to `analyze_withdrawal_strategy`, `analyze_gain_harvesting`, and `analyze_relocation`).
 
 ```
 analyze_roth_conversion({
@@ -127,12 +132,15 @@ annual + lifetime difference, a one-time estate-tax delta, and a `move` / `stay`
 recommendation with the dominant driver named.
 REQUIRED: `from_state`, `to_state` (two-letter codes). Optional: `annual_retirement_income`,
 `social_security_income`, `annual_capital_gains`, `annual_spend` (at COL index 100),
-`real_estate_value`, `filing_status`, `life_expectancy` (sets the horizon), `tax_year`, plus
-`overrides` for flat-rate states without a bracket table (CA/NY/MA have tables; PA/CO/etc. need a
-flat rate, else their income tax is reported as $0 with an assumption note). Federal income & estate
-tax are state-invariant and excluded from the delta; figures are real-dollar, undiscounted.
+`real_estate_value`, `filing_status`, `current_age`, `life_expectancy` (sets the horizon),
+`liquid_assets`, `mortgage_principal`, `estimated_growth_rate`, `tax_year`, and `plan_id` /
+`overrides` (plan resolution). State income tax comes from the server's STATE_PROFILE: CA/NY/MA use
+progressive bracket tables; other income-tax states fall back to a profile flat rate (states with no
+profile rate report $0 income tax with an `assumed_defaults[]` note). There is **no** `state_flat_rate`
+field on this tool — flat rates are server-side, not user-supplied. Federal income & estate tax are
+state-invariant and excluded from the delta; figures are real-dollar, undiscounted.
 
-Unlike the five prose-only tax tools, `analyze_relocation` (and `analyze_gain_harvesting`) **does** emit a structured `assumed_defaults[]`
+Like every tool in this skill, `analyze_relocation` emits a structured `assumed_defaults[]`
 array (every state-profile fallback it applied — no-SS-tax, $0 retirement-income exclusion, default
 property rate, the 85% Social-Security convention) and a **`share_url`** when you pass `{ plan_id }`.
 Read back the `assumed_defaults[]` and offer the link. Because this is a near-retiree decision, pair
@@ -144,29 +152,28 @@ it with the **`retirement-income`** skill (`analyze_withdrawal_strategy`, `optim
 For whichever tool you called:
 - **Lead with the headline dollar figure** — annual tax savings, per-year conversion amounts +
   lifetime RMD tax avoided, AMT/NIIT crossover, remaining after-tax space, total surtax bite.
-- **Read back the assumptions verbatim.** The five prose-only tax tools (`analyze_tax_optimization`,
-  `optimize_multi_year_tax`, `analyze_roth_conversion`, `analyze_mega_backdoor_roth`,
-  `analyze_advanced_taxes`) do **not** emit a structured `assumed_defaults[]` array — they apply
-  silent Zod defaults (e.g. ordinary rate 0.24, cap-gains 0.15, bond allocation 0.2, standard
-  deduction $29,200; Roth target bracket 0.12, RMD age 73, life expectancy 92) and expose what they
-  assumed only as **prose in `disclosures.key_assumptions`**. `analyze_relocation` and
-  `analyze_gain_harvesting` are the exceptions: they return a structured **`assumed_defaults[]`**
-  (read each one back). Either way, surface the assumptions so the user can correct any silent
-  default.
-- Honor `disclosures.not_advice` — present as planning estimates, not tax advice.
+- **Read back the assumptions verbatim.** Every tax tool returns a structured **`assumed_defaults[]`**
+  array — each entry is `{ field, assumed_value, note }` for an input it had to assume (e.g. ordinary
+  rate 0.24, cap-gains 0.15, bond allocation 0.2, standard deduction $29,200; Roth target bracket
+  0.12, RMD age 73, life expectancy 92). Read each one back so the user can correct any silent
+  default. (`disclosures.key_assumptions` is separate static explanatory prose — not the assumption
+  list; the machine-readable record lives in `assumed_defaults[]`.)
+- Honor `disclosures.not_advice` (a **boolean** flag, not a message) — present results as planning
+  estimates, not tax advice.
 - **Follow `next_actions[]`** — each is `{ tool, why, prefilled_args }` (carrying `{ plan_id }`
   when available). Use these server-suggested chains rather than guessing the next call.
-- **For a share link:** the five prose-only tax tools don't return one. `analyze_relocation` and
-  `analyze_gain_harvesting` do return a `share_url` when called with `{ plan_id }`. Otherwise, run
-  `generate_financial_plan` (Step 1) and surface its `share_url`.
+- **For a share link:** every tax tool returns a `share_url` when called with a `{ plan_id }` that
+  resolves a saved household; without a `plan_id` no link is emitted, so run `generate_financial_plan`
+  (Step 1) first to mint a `plan_id` and surface its `share_url`.
 
 ## Recommended call sequence (typical session)
 
 1. (optional) `generate_financial_plan` → capture `plan_id` (+ `share_url`).
 2. Route by intent → one of the seven tools (with `{ plan_id }` or raw fields).
-3. Read back the headline + `disclosures.key_assumptions`.
-4. Follow `next_actions[]` (often chains into another tax tool, the retirement-income
-   `analyze_healthcare_bridge`, or `generate_financial_plan` for a share link).
+3. Read back the headline + the structured `assumed_defaults[]`.
+4. Follow `next_actions[]` (for these tools the edges chain into `analyze_advanced_taxes`,
+   `analyze_gain_harvesting`, `analyze_withdrawal_strategy`, `analyze_estate_exposure`,
+   `analyze_relocation`, or `analyze_self_employed_retirement`).
 
 ## Fictional examples
 
@@ -174,7 +181,7 @@ For whichever tool you called:
 → `analyze_tax_optimization({ tax_deferred_balance: 900000, taxable_balance: 400000,
 ordinary_tax_rate: 0.24, age: 52 })`. Lead with the annual asset-location tax-drag savings; offer to
 turn on `enable_tlh` / `enable_charitable` if they have realized gains or giving intent. Read back
-key_assumptions (cap-gains rate, allocation, standard deduction).
+the `assumed_defaults[]` (cap-gains rate, allocation, standard deduction).
 
 **2.** *"I want to convert my traditional IRA to Roth between 60 and 70, MFJ, filling the 12% bracket
 — how much each year?"* → `analyze_roth_conversion({ traditional_balance: <ask>, current_age: 60,
@@ -206,11 +213,11 @@ so sequence them).
 - All decimals are fractions; all dollars are today's (real) dollars; brackets/limits are ~2026
   (override `tax_year` as needed).
 - Pass `{ plan_id }` to reuse a saved household model; any field you also pass is a shallow override.
-- The five prose-only tax tools surface assumptions as **prose in `disclosures.key_assumptions`**,
-  not a structured `assumed_defaults[]`, and they do **not** return a `share_url` — chain
-  `generate_financial_plan` for a sharable link. (Server follow-up tracked in `SKILL_AUTHORING.md`.)
-  `analyze_relocation` and `analyze_gain_harvesting` are the exceptions: they emit a structured
-  `assumed_defaults[]` and a `share_url` (with `plan_id`).
+- Every tax tool surfaces its assumptions as a structured **`assumed_defaults[]`** array
+  (`{ field, assumed_value, note }`) — read each entry back. `disclosures.key_assumptions` is
+  separate static prose and `disclosures.not_advice` is a boolean. Each tool also returns a
+  `share_url` when passed a `plan_id` that resolves a household; with no `plan_id`, run
+  `generate_financial_plan` for a sharable link.
 - **Tax-gain harvesting** (`analyze_gain_harvesting`) **complements tax-loss harvesting** (the TLH
   path in `analyze_tax_optimization`): losses offset realized gains, while gain-harvesting books
   long-term gains at the 0% rate and steps up basis for free. It also **pairs with
