@@ -1,7 +1,7 @@
 ---
 name: tax-optimizer
-version: 1.3.0
-description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — or weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
+version: 1.4.0
+description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — check whether you qualify for the federal Saver's Credit (up to 50% of retirement contributions for lower/moderate income) — or size a 72(t)/SEPP substantially-equal-payment stream for penalty-free access to retirement money before 59½ — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
 ---
 
 # Tax Optimizer
@@ -16,7 +16,8 @@ listing each input it had to assume — always read these back to the user.
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_optimization`):
 `analyze_tax_optimization`, `optimize_multi_year_tax`, `analyze_roth_conversion`,
-`analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_gain_harvesting`, `analyze_relocation`, plus optional `generate_financial_plan`
+`analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_gain_harvesting`, `analyze_relocation`,
+`analyze_savers_credit`, `analyze_72t_sepp`, plus optional `generate_financial_plan`
 (for `plan_id` chaining + a `share_url`). Use whichever name your environment exposes (bare or
 `mcp__planfi__`-prefixed); below they are written bare.
 
@@ -33,7 +34,7 @@ claude mcp add --transport http planfi https://ai.planfi.app/mcp
 > **Feed it into the forecast (not just plan_id chaining):** `generate_financial_plan` now accepts `gain_harvesting` directly as a plan input, so it flows into net worth, FIRE %, and Monte-Carlo backtesting — the 0%-LTCG harvest is applied as a one-time tax effect. Use the standalone analyze tool below for a focused what-if; pass `gain_harvesting` into the plan to see its effect on the whole household forecast.
 
 If the user has (or wants) a full household model, call **`generate_financial_plan`** once and
-**capture the returned `plan_id`**. All seven tools in this skill accept `{ plan_id }` (plus inline overrides),
+**capture the returned `plan_id`**. The plan-aware tools in this skill accept `{ plan_id }` (plus inline overrides),
 so they can resolve balances, income, age, and filing status from the saved plan instead of you
 re-sending every figure. Every tax tool also returns a **`share_url`** (planfi.app) **when you pass
 a `plan_id` that resolves a saved household** — without a `plan_id` there is no plan to share, so no
@@ -155,6 +156,49 @@ Read back the `assumed_defaults[]` and offer the link. Because this is a near-re
 it with the **`retirement-income`** skill (`analyze_withdrawal_strategy`, `optimize_social_security`,
 `analyze_estate_exposure`) for the full decumulation picture once the state is chosen.
 
+### "Do I qualify for the Saver's Credit?" → `analyze_savers_credit`
+The federal Saver's Credit (Retirement Savings Contributions Credit, IRC §25B): a **non-refundable**
+credit of **50% / 20% / 10%** of up to **$2,000 per person** of IRA + elective-deferral contributions,
+phased out by AGI and filing status. The server owns every AGI breakpoint and tier — do **not** hardcode
+thresholds here.
+Useful fields: `agi`, `filing_status`, `retirement_contributions` (IRA + 401(k)/403(b) elective deferrals),
+`age`, `is_student`, `is_dependent` (the three eligibility gates — under-18, full-time student, or claimed
+as a dependent all disqualify). Returns the credit rate/band, eligible contributions counted, the gross and
+allowed (liability-capped) credit, and whether it was capped by your tax liability.
+
+```
+analyze_savers_credit({
+  agi: 34000, filing_status: "single",
+  retirement_contributions: 2000, age: 27
+})
+// → 50% band → ~$1,000 credit on $2,000 of Roth IRA contributions (non-refundable, capped to tax owed)
+```
+
+### "Access retirement money penalty-free before 59½" → `analyze_72t_sepp`
+72(t) **substantially-equal-periodic-payments (SEPP)**: how much you can pull from an IRA/401(k) each year
+**penalty-free before 59½** by committing to a fixed-formula stream for the longer of **5 years or until age
+59½**. The server owns the divisor table and the max(5%, 120% mid-term AFR) interest-rate cap — no thresholds
+live here.
+Useful fields: `account_balance`, `current_age`, `method` (`amortization` / `rmd` / `annuitization`),
+`interest_rate`. Returns the annual distribution for the chosen method, all three methods side-by-side, the
+commitment-window years, whether the rate is within the §72(t) max, and the retroactive-10%-penalty warning if
+the SEPP is modified early.
+
+```
+analyze_72t_sepp({
+  account_balance: 1000000, current_age: 52,
+  method: "amortization", interest_rate: 0.05
+})
+// → fixed annual SEPP withdrawal, locked in for the longer of 5 yrs or age 59½
+```
+
+> **Pairs with `retirement-income` and `financial-forecast`:** a 72(t) is an early-retirement decumulation
+> bridge — pair it with the **`retirement-income`** skill's `analyze_withdrawal_strategy` /
+> `analyze_healthcare_bridge` for the pre-Medicare income+coverage picture, and use the
+> **`financial-forecast`** skill to see the SEPP floor inside a full household projection. The Saver's Credit
+> matters most for early-career accumulators — fold it into a forecast via `financial-forecast` to see it land
+> on the federal tax line.
+
 ## Step 3 — Surface results honestly
 
 For whichever tool you called:
@@ -177,7 +221,7 @@ For whichever tool you called:
 ## Recommended call sequence (typical session)
 
 1. (optional) `generate_financial_plan` → capture `plan_id` (+ `share_url`).
-2. Route by intent → one of the seven tools (with `{ plan_id }` or raw fields).
+2. Route by intent → one of the tools above (with `{ plan_id }` or raw fields).
 3. Read back the headline + the structured `assumed_defaults[]`.
 4. Follow `next_actions[]` (for these tools the edges chain into `analyze_advanced_taxes`,
    `analyze_gain_harvesting`, `analyze_withdrawal_strategy`, `analyze_estate_exposure`,
