@@ -1,6 +1,6 @@
 ---
 name: tax-optimizer
-version: 1.2.0
+version: 1.3.0
 description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — or weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
 ---
 
@@ -134,11 +134,19 @@ REQUIRED: `from_state`, `to_state` (two-letter codes). Optional: `annual_retirem
 `social_security_income`, `annual_capital_gains`, `annual_spend` (at COL index 100),
 `real_estate_value`, `filing_status`, `current_age`, `life_expectancy` (sets the horizon),
 `liquid_assets`, `mortgage_principal`, `estimated_growth_rate`, `tax_year`, and `plan_id` /
-`overrides` (plan resolution). State income tax comes from the server's STATE_PROFILE: CA/NY/MA use
-progressive bracket tables; other income-tax states fall back to a profile flat rate (states with no
-profile rate report $0 income tax with an `assumed_defaults[]` note). There is **no** `state_flat_rate`
-field on this tool — flat rates are server-side, not user-supplied. Federal income & estate tax are
-state-invariant and excluded from the delta; figures are real-dollar, undiscounted.
+`overrides` (plan resolution). State income tax comes from the server's shared engine
+(`state-tax.ts`): progressive bracket tables for all 50 states + DC, with first-class single and
+married-filing-jointly (MFJ) brackets, so `filing_status` branches every state (no-income-tax states
+report $0). There is **no** `state_flat_rate` field on this tool — brackets are server-side, not
+user-supplied. Federal income & estate tax are state-invariant and excluded from the delta; figures
+are real-dollar, undiscounted.
+
+> **Shared bracket engine — `n/a (shared engine: state-tax.ts)`.** The progressive 50-state + DC
+> single/MFJ bracket tables (with per-state surtaxes) live in one shared engine module
+> (`state-tax.ts`) reused by every tool here and by the **`relocation-planner`** skill — there is no
+> CA/NY/MA-only special-casing and no per-tool flat-rate fallback. For a relocation-only question
+> (no broader tax work), the **`relocation-planner`** skill wraps the same `analyze_relocation`
+> tool as a focused entry point.
 
 Like every tool in this skill, `analyze_relocation` emits a structured `assumed_defaults[]`
 array (every state-profile fallback it applied — no-SS-tax, $0 retirement-income exclusion, default
