@@ -1,6 +1,6 @@
 # tax-optimizer (Claude Agent Skill)
 
-Cut taxes across accounts and years: broad tax optimization (asset location, tax-loss harvesting, charitable), multi-year ISO/conversion timing (AMT/NIIT/IRMAA-aware), Roth conversion ladders, mega-backdoor Roth space, advanced surtaxes (NIIT/AMT/state), tax-gain harvesting (how much long-term gain you can realize at the 0% capital-gains rate before NIIT/IRMAA bites), and retirement relocation / state-tax arbitrage (compare the lifetime after-tax cost of retiring in state A vs B). Thin orchestration over the planfi MCP.
+Cut taxes across accounts and years: broad tax optimization (asset location, tax-loss harvesting, charitable), multi-year ISO/conversion timing (AMT/NIIT/IRMAA-aware), Roth conversion ladders, mega-backdoor Roth space, advanced surtaxes (NIIT/AMT/state), tax-gain harvesting (how much long-term gain you can realize at the 0% capital-gains rate before NIIT/IRMAA bites), tax-loss harvesting (`analyze_tax_loss_harvesting` — harvest lot-level unrealized losses to offset realized gains and up to $3,000 of ordinary income, flag wash sales, suggest replacement securities), and retirement relocation / state-tax arbitrage (compare the lifetime after-tax cost of retiring in state A vs B). Thin orchestration over the planfi MCP.
 
 > **Retirement relocation:** *"I'm retiring in California but thinking about Texas — $80k of IRA
 > withdrawals, $40k Social Security, a $600k house, ~$60k spend. Worth the move?"* →
@@ -67,6 +67,9 @@ Restart Claude Code (or start a new session). The skill auto-loads by its descri
 - Every tool returns a structured `assumed_defaults[]` array (`{ field, assumed_value, note }`); the
   skill reads each entry back so you can correct any silent default. Each tool also returns a
   `share_url` when passed a `plan_id` that resolves a saved household.
+- Tax-loss harvesting is the mirror of tax-gain harvesting. Example:
+  `analyze_tax_loss_harvesting({ lots: [{ symbol: "VTI", costBasis: 60000, marketValue: 48000, term: "long" }], realizedLongTermGain: 40000, ordinaryTaxableIncome: 120000, filingStatus: "married_joint" })`
+  returns the harvestable loss, tax benefit, wash-sale flags, and replacement suggestions (federal-only in v1).
 - Not financial advice. Planning estimates only.
 
 See `SKILL.md` for the full instructions, exact tool params, and output format.

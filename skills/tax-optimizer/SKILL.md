@@ -1,7 +1,7 @@
 ---
 name: tax-optimizer
-version: 1.4.0
-description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — check whether you qualify for the federal Saver's Credit (up to 50% of retirement contributions for lower/moderate income) — or size a 72(t)/SEPP substantially-equal-payment stream for penalty-free access to retirement money before 59½ — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
+version: 1.5.0
+description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — harvest lot-level unrealized losses to offset realized gains and up to $3,000 of ordinary income, flag wash sales, suggest replacement securities (tax-loss harvesting) — weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — check whether you qualify for the federal Saver's Credit (up to 50% of retirement contributions for lower/moderate income) — or size a 72(t)/SEPP substantially-equal-payment stream for penalty-free access to retirement money before 59½ — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
 ---
 
 # Tax Optimizer
@@ -16,7 +16,8 @@ listing each input it had to assume — always read these back to the user.
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_optimization`):
 `analyze_tax_optimization`, `optimize_multi_year_tax`, `analyze_roth_conversion`,
-`analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_gain_harvesting`, `analyze_relocation`,
+`analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_gain_harvesting`,
+`analyze_tax_loss_harvesting`, `analyze_relocation`,
 `analyze_savers_credit`, `analyze_72t_sepp`, plus optional `generate_financial_plan`
 (for `plan_id` chaining + a `share_url`). Use whichever name your environment exposes (bare or
 `mcp__planfi__`-prefixed); below they are written bare.
@@ -123,6 +124,35 @@ gain), `ordinary_taxable_income`, `existing_realized_ltcg` (gains already booked
 analyze_gain_harvesting({
   unrealized_ltcg_gain: 80000, ordinary_taxable_income: 50000,
   filing_status: "married_joint", magi: 115000, age: 55, target_max_ltcg_rate: 0
+})
+```
+
+### "Harvest my losses / offset my gains / what can I write off / will this trigger a wash sale / what do I buy instead / sell my losers for the tax break?" → `analyze_tax_loss_harvesting`
+**Always CALL `analyze_tax_loss_harvesting` for these — do not answer from general knowledge or quote
+the $3,000 / 30-day rules of thumb from memory.** When the user gives lots and a gain budget, run it
+and lead with its real output (harvestable amount, tax saved, wash-sale flags, replacement
+suggestions). Tax-**loss** harvesting is the mirror of gain-harvesting: it identifies lot-level
+unrealized losses, nets them against realized ST/LT gains (IRC §1211/§1212 order), applies up to
+**$3,000** against ordinary income, carries the rest forward, flags **wash-sale** windows (30-day,
+cross-account incl. spouse/IRA, IRC §1091), and suggests correlated-but-not-substantially-identical
+replacement securities. Returns `harvestable_loss`, `disallowed_loss`, `wash_sale_lots[]`,
+`net_short_term` / `net_long_term`, `ordinary_offset`, `tax_benefit`, `niit_savings`,
+`loss_carryforward_to_next_year`, `replacement_suggestions[]`, and a `netting_steps[]` audit trail.
+Useful fields: `lots[]` (each `{ costBasis, marketValue, term: 'short'|'long', symbol?, account?,
+recentPurchaseDates?[] }`), `realizedShortTermGain`, `realizedLongTermGain`,
+`shortTermLossCarryforward`, `longTermLossCarryforward`, `ordinaryTaxableIncome`, `filingStatus`,
+`magi` (NIIT), `harvestDate`, `age`. Federal-only in v1 (most states disallow/cap the $3k
+net-loss-against-ordinary deduction). The replacement map never names the same CUSIP/index — the
+substantially-identical judgment is the user's.
+
+```
+analyze_tax_loss_harvesting({
+  lots: [
+    { symbol: "VTI", costBasis: 60000, marketValue: 48000, term: "long" },
+    { symbol: "VXUS", costBasis: 30000, marketValue: 22000, term: "short",
+      recentPurchaseDates: ["2026-12-01"] }
+  ],
+  realizedLongTermGain: 40000, ordinaryTaxableIncome: 120000, filingStatus: "married_joint"
 })
 ```
 
@@ -270,8 +300,12 @@ so sequence them).
   separate static prose and `disclosures.not_advice` is a boolean. Each tool also returns a
   `share_url` when passed a `plan_id` that resolves a household; with no `plan_id`, run
   `generate_financial_plan` for a sharable link.
-- **Tax-gain harvesting** (`analyze_gain_harvesting`) **complements tax-loss harvesting** (the TLH
-  path in `analyze_tax_optimization`): losses offset realized gains, while gain-harvesting books
+- **Tax-loss harvesting** (`analyze_tax_loss_harvesting`) **is the mirror of tax-gain harvesting**
+  (`analyze_gain_harvesting`): TLH nets lot-level losses against realized gains, deducts up to $3,000
+  against ordinary income, flags wash sales, and suggests replacements; gain-harvesting books gains at
+  the 0% rate. Call `analyze_tax_loss_harvesting` whenever the user has losing lots and a gain budget.
+- **Tax-gain harvesting** (`analyze_gain_harvesting`) **complements tax-loss harvesting**
+  (`analyze_tax_loss_harvesting`): losses offset realized gains, while gain-harvesting books
   long-term gains at the 0% rate and steps up basis for free. It also **pairs with
   `analyze_roth_conversion`** — both consume the same 0%-bracket / low-income headroom, so a household
   with limited room must choose how to spend it (sequence the two rather than double-count the space).
