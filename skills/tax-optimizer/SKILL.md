@@ -12,6 +12,10 @@ tools — it does **not** compute anything locally and bakes in no defaults of i
 Every tool returns a structured **`assumed_defaults[]`** array (`{ field, assumed_value, note }`)
 listing each input it had to assume — always read these back to the user.
 
+**Related skills:** for high-W2 execs weighing an employer Nonqualified Deferred Comp (NQDC / 409A)
+election — defer-now-vs-take-now, lump-vs-installment distribution, and smoothing the distribution
+years' brackets / IRMAA — see **deferred-comp** (`analyze_deferred_comp`).
+
 ## Step 0 — Make sure the planfi tools are connected
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_optimization`):
