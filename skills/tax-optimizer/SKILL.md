@@ -1,6 +1,6 @@
 ---
 name: tax-optimizer
-version: 1.7.0
+version: 1.8.0
 description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, optimize charitable giving — bunch donations into a donor-advised fund (DAF) to clear the standard deduction, take a QCD at 70½+ that lowers AGI/IRMAA/Social-Security taxation, or give long-term appreciated stock/RSUs in-kind to avoid capital gains while still deducting FMV — realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — harvest lot-level unrealized losses to offset realized gains and up to $3,000 of ordinary income, flag wash sales, suggest replacement securities (tax-loss harvesting) — weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — check whether you qualify for the federal Saver's Credit (up to 50% of retirement contributions for lower/moderate income) — or size a 72(t)/SEPP substantially-equal-payment stream for penalty-free access to retirement money before 59½ — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
 ---
 
@@ -21,7 +21,7 @@ years' brackets / IRMAA — see **deferred-comp** (`analyze_deferred_comp`).
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_optimization`):
 `analyze_tax_optimization`, `optimize_multi_year_tax`, `analyze_roth_conversion`,
 `analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_gain_harvesting`,
-`analyze_tax_loss_harvesting`, `analyze_charitable_giving`, `analyze_relocation`,
+`analyze_tax_loss_harvesting`, `analyze_tax_lots`, `analyze_charitable_giving`, `analyze_relocation`,
 `analyze_savers_credit`, `analyze_72t_sepp`, `analyze_hsa_retirement`, plus optional `generate_financial_plan`
 (for `plan_id` chaining + a `share_url`). Use whichever name your environment exposes (bare or
 `mcp__planfi__`-prefixed); below they are written bare.
@@ -183,6 +183,23 @@ analyze_tax_loss_harvesting({
   realizedLongTermGain: 40000, ordinaryTaxableIncome: 120000, filingStatus: "married_joint"
 })
 ```
+
+### "Which lots should I sell? / HIFO vs FIFO vs specific-ID / which shares to sell to minimize tax / can I harvest a crypto loss and rebuy immediately / will selling these specific lots trigger a wash sale / pick the lots that maximize my harvested loss / short-term vs long-term on these lots?" → `analyze_tax_lots`
+**Always CALL `analyze_tax_lots` for these — do not answer from general knowledge or quote the HIFO / FIFO / §1091 30-day / "crypto isn't a security" rules of thumb from memory. When the user gives the lots (qty, basis, acquire date) + a sale quantity and price, run it and lead with its real output (the recommended lot-selection set per method, realized ST vs LT gain/loss, wash-sale-disallowed loss + basis adjustment, the crypto-vs-equity treatment difference, and after-tax proceeds + tax saved).** This is the **lot-level** optimizer — distinct from `analyze_tax_loss_harvesting` / `analyze_gain_harvesting`, which work on the portfolio AGGREGATE. Use this one whenever the question is about *which individual purchase lots* to sell. It compares **HIFO** (highest-basis first → max loss / min gain), **FIFO**, and **specific-ID**; splits short-term vs long-term per lot by acquire date; applies the §1091 wash-sale disallowance to **equity** lots sold at a loss (the disallowed loss adds to the replacement lot's basis); and models the **crypto carve-out** (crypto is property, not a security — wash-sale does NOT apply under current law, so the loss is harvestable and you can repurchase immediately), with `apply_crypto_wash_sale` to model proposed future law. Returns `recommended_lots[]`, `realized_short_term_gain` / `realized_long_term_gain`, `wash_sale_disallowed_loss`, `basis_adjustment`, `crypto_vs_equity_difference`, `after_tax_proceeds`, `tax_saved`, and a `method_comparison[]` (HIFO/FIFO/specific side-by-side). Federal-only; ST gain at the ordinary marginal rate, LT gain via the LTCG bracket stack, plus NIIT.
+
+```
+analyze_tax_lots({
+  asset_class: "equity",
+  filing_status: "single", ordinary_taxable_income: 50000,
+  lots: [
+    { id: "L1", qty: 100, cost_basis_per_share: 50, acquire_date: "2024-01-01" },
+    { id: "L2", qty: 100, cost_basis_per_share: 90, acquire_date: "2025-12-01" }
+  ],
+  sale_qty: 100, current_price_per_share: 70, method: "HIFO"
+})
+```
+
+**Chain note:** roll the harvested losses into `analyze_tax_loss_harvesting` (the aggregate view + wash-sale-safe replacements), realize the chosen long-term-gain lots at 0% via `analyze_gain_harvesting` in a low-income year, or run the realized gain through `analyze_advanced_taxes` for the full NIIT/bracket picture.
 
 ### "Should I retire in / move to a lower-tax state?" → `analyze_relocation`
 Lifetime after-tax comparison of state A vs B: state income tax, capital-gains, retirement-income &
