@@ -1,6 +1,6 @@
 ---
 name: tax-optimizer
-version: 1.6.0
+version: 1.7.0
 description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, optimize charitable giving — bunch donations into a donor-advised fund (DAF) to clear the standard deduction, take a QCD at 70½+ that lowers AGI/IRMAA/Social-Security taxation, or give long-term appreciated stock/RSUs in-kind to avoid capital gains while still deducting FMV — realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — harvest lot-level unrealized losses to offset realized gains and up to $3,000 of ordinary income, flag wash sales, suggest replacement securities (tax-loss harvesting) — weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — check whether you qualify for the federal Saver's Credit (up to 50% of retirement contributions for lower/moderate income) — or size a 72(t)/SEPP substantially-equal-payment stream for penalty-free access to retirement money before 59½ — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
 ---
 
@@ -22,7 +22,7 @@ This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_o
 `analyze_tax_optimization`, `optimize_multi_year_tax`, `analyze_roth_conversion`,
 `analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_gain_harvesting`,
 `analyze_tax_loss_harvesting`, `analyze_charitable_giving`, `analyze_relocation`,
-`analyze_savers_credit`, `analyze_72t_sepp`, plus optional `generate_financial_plan`
+`analyze_savers_credit`, `analyze_72t_sepp`, `analyze_hsa_retirement`, plus optional `generate_financial_plan`
 (for `plan_id` chaining + a `share_url`). Use whichever name your environment exposes (bare or
 `mcp__planfi__`-prefixed); below they are written bare.
 
@@ -250,6 +250,28 @@ analyze_72t_sepp({
 // → fixed annual SEPP withdrawal, locked in for the longer of 5 yrs or age 59½
 ```
 
+### "Should I max my HSA and invest it? / Is the HSA a good retirement account? / triple-tax-advantaged / save medical receipts and reimburse later / receipt shoebox / deferred reimbursement / how much can I contribute to my HSA in 2026 / family vs self HSA limit / age-55 HSA catch-up / can I keep contributing past 65 / HSA after Medicare / use HSA for non-medical after 65" → `analyze_hsa_retirement`
+**Always CALL `analyze_hsa_retirement` for these — do not answer from general knowledge or quote the contribution-limit / triple-tax / age-65 rules of thumb from memory. When the user gives the numbers, run it and lead with its real output (recommended contribution + invest decision, projected tax-free medical reserve, receipt-banking advantage in $, age-65 withdrawal recommendation, lifetime tax saved vs spending annually).**
+
+The HSA-as-retirement optimizer treats the HSA as the only **triple-tax-advantaged** investable retirement vehicle and models four levers deterministically (compounding + bracket math, no Monte Carlo):
+- **MAX-FUND + INVEST vs spend** — 2026 family/individual contribution limits + the age-55 **$1,000 catch-up** (server-sourced from `tax-limits`, never hardcoded), deposit-then-grow compounding to retirement.
+- **RECEIPT-SHOEBOX / DEFERRED REIMBURSEMENT** — pay current qualified medical out-of-pocket, bank the unreimbursed receipts, reimburse tax-free decades later after the balance compounds; quantifies the invest-and-defer advantage in dollars (`receipt_banking_advantage_dollars`) and the breakeven horizon.
+- **6-MONTHS-BEFORE-MEDICARE contribution stop** and its interaction with working past 65 under an employer HDHP (`medicare_contribution_stop_age`).
+- **AGE-65 PIVOT** — after 65 non-medical withdrawals are penalty-free but taxable (traditional-IRA-equivalent) while qualified-medical withdrawals stay tax-free (`age_65_withdrawal_recommendation`).
+
+Useful fields (every one optional, plan-resolved when omitted): `current_age`, `retirement_age`, `coverage_type` (`individual`/`family`), `current_hsa_balance`, `annual_contribution`, `invest_balance` (boolean), `expected_real_return`, `annual_qualified_medical_oop` (the receipt-banking candidate, paid from cash), `marginal_tax_rate` (else derived from income), `filing_status`, `working_past_65`, `medicare_enrollment_age`, `tax_year`, `plan_id`, `overrides`. Returns `recommended_annual_contribution`, `invest_recommendation`, `projected_tax_free_medical_reserve_at_retirement`, `receipt_banking_advantage_dollars`, `age_65_withdrawal_recommendation`, `lifetime_tax_saved_vs_spending_annually`, `contribution_limit_2026`, `catch_up_eligible`, `medicare_contribution_stop_age`, and `breakeven_year`.
+
+```
+analyze_hsa_retirement({
+  current_age: 35, retirement_age: 65, coverage_type: "family",
+  invest_balance: true, expected_real_return: 0.07,
+  annual_qualified_medical_oop: 2000, filing_status: "married_joint",
+  marginal_tax_rate: 0.24
+})
+// → recommended max contribution + "invest", projected tax-free medical reserve at 65,
+//   receipt-banking advantage in $, age-65 withdrawal recommendation, lifetime tax saved vs spending annually
+```
+
 > **Pairs with `retirement-income` and `financial-forecast`:** a 72(t) is an early-retirement decumulation
 > bridge — pair it with the **`retirement-income`** skill's `analyze_withdrawal_strategy` /
 > `analyze_healthcare_bridge` for the pre-Medicare income+coverage picture, and use the
@@ -283,7 +305,7 @@ For whichever tool you called:
 3. Read back the headline + the structured `assumed_defaults[]`.
 4. Follow `next_actions[]` (for these tools the edges chain into `analyze_advanced_taxes`,
    `analyze_gain_harvesting`, `analyze_withdrawal_strategy`, `analyze_estate_exposure`,
-   `analyze_relocation`, or `analyze_self_employed_retirement`).
+   `analyze_relocation`, `analyze_hsa_retirement`, or `analyze_self_employed_retirement`).
 
 ## Fictional examples
 
