@@ -1,7 +1,7 @@
 ---
 name: tax-optimizer
-version: 1.5.0
-description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — harvest lot-level unrealized losses to offset realized gains and up to $3,000 of ordinary income, flag wash sales, suggest replacement securities (tax-loss harvesting) — weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — check whether you qualify for the federal Saver's Credit (up to 50% of retirement contributions for lower/moderate income) — or size a 72(t)/SEPP substantially-equal-payment stream for penalty-free access to retirement money before 59½ — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
+version: 1.6.0
+description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, optimize charitable giving — bunch donations into a donor-advised fund (DAF) to clear the standard deduction, take a QCD at 70½+ that lowers AGI/IRMAA/Social-Security taxation, or give long-term appreciated stock/RSUs in-kind to avoid capital gains while still deducting FMV — realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — harvest lot-level unrealized losses to offset realized gains and up to $3,000 of ordinary income, flag wash sales, suggest replacement securities (tax-loss harvesting) — weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — check whether you qualify for the federal Saver's Credit (up to 50% of retirement contributions for lower/moderate income) — or size a 72(t)/SEPP substantially-equal-payment stream for penalty-free access to retirement money before 59½ — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
 ---
 
 # Tax Optimizer
@@ -21,7 +21,7 @@ years' brackets / IRMAA — see **deferred-comp** (`analyze_deferred_comp`).
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_optimization`):
 `analyze_tax_optimization`, `optimize_multi_year_tax`, `analyze_roth_conversion`,
 `analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_gain_harvesting`,
-`analyze_tax_loss_harvesting`, `analyze_relocation`,
+`analyze_tax_loss_harvesting`, `analyze_charitable_giving`, `analyze_relocation`,
 `analyze_savers_credit`, `analyze_72t_sepp`, plus optional `generate_financial_plan`
 (for `plan_id` chaining + a `share_url`). Use whichever name your environment exposes (bare or
 `mcp__planfi__`-prefixed); below they are written bare.
@@ -130,6 +130,30 @@ analyze_gain_harvesting({
   filing_status: "married_joint", magi: 115000, age: 55, target_max_ltcg_rate: 0
 })
 ```
+
+### "Should I bunch my donations? / front-load a donor-advised fund / give appreciated stock instead of cash / use a QCD from my IRA to cover my RMD / how do I give to charity tax-efficiently / clear the standard deduction by bunching / donate my RSUs / avoid capital gains by donating / lower my AGI with a QCD?" → `analyze_charitable_giving`
+**Always CALL `analyze_charitable_giving` for these — do not answer from general knowledge or quote the standard-deduction / 60%-AGI / QCD-cap rules of thumb from memory. When the user gives the numbers, run it and lead with its real output (recommended strategy, estimated tax savings, bunching schedule, AGI-limit headroom).** This is the first-class charitable analyzer for high earners (32–37% brackets) with charitable intent and/or concentrated appreciated positions. It compares four levers and recommends the highest-savings one:
+- **BUNCHING / DAF** — concentrate several years of giving into one year (or front-load a donor-advised-fund lump sum) so the bunch-year itemized deductions clear the 2026 standard deduction; itemize in the bunch year, take the standard deduction in off-years. The `bunching` block returns `bunchedDonation`, `deductionGain`, the per-year `schedule[]` (`{ year, donation, deductionTaken, itemizes }`), and `taxSavings` (zero benefit when per-year itemized already beats the standard deduction — the tool tells you).
+- **APPRECIATED SECURITIES vs cash** — donating long-term appreciated stock at fair-market value **avoids the capital-gains tax AND NIIT** on the embedded gain *while still taking the full FMV deduction*. The `appreciated` block returns `unrealizedGain`, `capGainsAvoided`, `niitAvoided`, `fmvDeduction`, and `taxSavingsVsCash` (the in-kind edge over selling-then-donating, where the FMV deduction is identical).
+- **QCD (age 70½+)** — a Qualified Charitable Distribution satisfies the RMD while **excluding** the amount from AGI (capped at the 2026 QCD cap). The `qcd` block returns `eligible`, `rmd`, `qcdApplied`, `cap`, and `taxSavings`.
+- **AGI deduction limits** — the `agi_limits` block returns `cashLimit` (60% AGI), `appreciatedLimit` (30% AGI), `cashHeadroom`, `appreciatedHeadroom`, and any 5-year `carryforward` of excess.
+
+Top-level returns: `recommended_strategy`, `estimated_tax_savings`, the four blocks above, and an `assumptions[]` list. Useful fields (every one optional, plan-resolved when omitted): `age`, `filing_status`, `adjusted_gross_income` (alias `agi`) — drives the 60%/30% AGI limits + NIIT, `ordinary_taxable_income` (the bracket base + QCD marginal-rate lookup — never a flat assumed rate), `ira_balance` (alias `rmd_amount`), `birth_year`, `annual_donation` (alias `cash_donation`), `years_to_bunch`, `other_itemized_deductions`, `appreciated_securities_value`, `appreciated_cost_basis`, `daf_contribution`, `qcd_amount`, `state_code`, `tax_year`, `plan_id`.
+
+```
+analyze_charitable_giving({
+  filing_status: "married_joint", age: 72,
+  ordinary_taxable_income: 380000, adjusted_gross_income: 400000,
+  annual_donation: 15000, other_itemized_deductions: 8000, years_to_bunch: 3,
+  appreciated_securities_value: 50000, appreciated_cost_basis: 10000,
+  ira_balance: 500000, qcd_amount: 20000
+})
+// → recommended_strategy + estimated_tax_savings, with bunching{bunchedDonation,deductionGain,taxSavings,schedule[]},
+//   appreciated{unrealizedGain,capGainsAvoided,niitAvoided,fmvDeduction,taxSavingsVsCash},
+//   qcd{eligible,rmd,qcdApplied,cap,taxSavings}, agi_limits{cashLimit,appreciatedLimit,cashHeadroom,appreciatedHeadroom,carryforward}
+```
+
+**Chain note:** complements `analyze_gain_harvesting` (donate the most-appreciated lots instead of harvesting/selling them — the appreciated-securities overlap), `analyze_rmd` (a QCD satisfies the RMD it sizes — the QCD overlap), and `analyze_irmaa` (the QCD's AGI exclusion is what relieves an IRMAA tier).
 
 ### "Harvest my losses / offset my gains / what can I write off / will this trigger a wash sale / what do I buy instead / sell my losers for the tax break?" → `analyze_tax_loss_harvesting`
 **Always CALL `analyze_tax_loss_harvesting` for these — do not answer from general knowledge or quote
@@ -292,6 +316,9 @@ breakpoint** (and, if `magi`/`age` push them near it, the NIIT or IRMAA threshol
 mirror of tax-loss harvesting and pairs with a Roth conversion (both spend the same 0%-bracket room,
 so sequence them).
 
+**5.** *"We're 72, MFJ, ~$380k taxable / $400k AGI, give ~$15k/yr to charity, hold $50k of stock (basis $10k), and have $500k in a traditional IRA. Should I bunch into a DAF, give the appreciated shares, and do a QCD from our IRA?"* →
+`analyze_charitable_giving({ filing_status: "married_joint", age: 72, ordinary_taxable_income: 380000, adjusted_gross_income: 400000, annual_donation: 15000, other_itemized_deductions: 8000, years_to_bunch: 3, appreciated_securities_value: 50000, appreciated_cost_basis: 10000, ira_balance: 500000, qcd_amount: 20000 })`. Lead with `recommended_strategy` and `estimated_tax_savings`; break out the levers — `bunching.deductionGain` × marginal rate (with the per-year `bunching.schedule[]`), the in-kind `appreciated.capGainsAvoided` + `appreciated.niitAvoided` (the gain-avoidance edge over selling-then-donating, where `appreciated.fmvDeduction` is identical), the `qcd.qcdApplied` AGI exclusion, and the `agi_limits` headroom (`cashHeadroom` / `appreciatedHeadroom` / any `carryforward`). Read back the `assumptions[]` (30%/60%-AGI ceilings, 5-yr carryforward, QCD cap and age 70½). Pairs with `analyze_gain_harvesting` (donate the most-appreciated lots), `analyze_rmd` (the QCD satisfies the RMD), and `analyze_irmaa`.
+
 *(All examples use fictional figures — never reuse a real user's numbers in documentation.)*
 
 ## Notes
@@ -313,6 +340,15 @@ so sequence them).
   long-term gains at the 0% rate and steps up basis for free. It also **pairs with
   `analyze_roth_conversion`** — both consume the same 0%-bracket / low-income headroom, so a household
   with limited room must choose how to spend it (sequence the two rather than double-count the space).
+- **Charitable giving** (`analyze_charitable_giving`) is the dedicated optimizer for donors and
+  holders of concentrated appreciated positions. Its three levers cross-link the rest of the suite:
+  **in-kind appreciated-stock** donation is the better move when `analyze_gain_harvesting` shows a
+  large embedded gain (donate the lot instead of selling it — you avoid the capital-gains tax AND
+  NIIT *and* still deduct FMV); a **QCD** at 70½+ satisfies the RMD that `analyze_rmd` sizes while
+  excluding it from AGI; and that AGI exclusion is exactly what relieves an IRMAA tier in
+  `analyze_irmaa`. Call `analyze_charitable_giving` whenever the user mentions giving, a DAF, a QCD,
+  or donating appreciated stock/RSUs — don't quote the 60%-of-AGI / QCD-age / standard-deduction
+  rules of thumb from memory.
 - Near-retiree weighing a move? Pair this with the **`retirement-income`** skill for the
   decumulation side (withdrawal order, Social Security claiming age, estate-tax exposure).
 - Self-employed / S-corp owner? The **`self-employed-planner`** skill sizes Solo 401(k) / SEP / SIMPLE
