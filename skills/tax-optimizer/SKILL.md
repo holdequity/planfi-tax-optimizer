@@ -21,8 +21,8 @@ years' brackets / IRMAA — see **deferred-comp** (`analyze_deferred_comp`).
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_optimization`):
 `analyze_tax_optimization`, `optimize_multi_year_tax`, `analyze_roth_conversion`,
 `analyze_mega_backdoor_roth`, `analyze_advanced_taxes`, `analyze_gain_harvesting`,
-`analyze_tax_loss_harvesting`, `analyze_tax_lots`, `analyze_charitable_giving`, `analyze_relocation`,
-`analyze_savers_credit`, `analyze_72t_sepp`, `analyze_hsa_retirement`, plus optional `generate_financial_plan`
+`analyze_tax_loss_harvesting`, `analyze_tax_lots`, `analyze_charitable_giving`, `analyze_opportunity_zone`,
+`analyze_relocation`, `analyze_savers_credit`, `analyze_72t_sepp`, `analyze_hsa_retirement`, plus optional `generate_financial_plan`
 (for `plan_id` chaining + a `share_url`). Use whichever name your environment exposes (bare or
 `mcp__planfi__`-prefixed); below they are written bare.
 
@@ -200,6 +200,25 @@ analyze_tax_lots({
 ```
 
 **Chain note:** roll the harvested losses into `analyze_tax_loss_harvesting` (the aggregate view + wash-sale-safe replacements), realize the chosen long-term-gain lots at 0% via `analyze_gain_harvesting` in a low-income year, or run the realized gain through `analyze_advanced_taxes` for the full NIIT/bracket picture.
+
+### "Big realized capital gain — Opportunity Zone / QOF / defer or eliminate cap-gains tax" → `analyze_opportunity_zone`
+Real-user phrasings: *"I have a $X capital gain, should I roll it into an Opportunity Zone?"*, *"How much tax can a QOF defer?"*, *"Opportunity Zone fund vs just paying the cap-gains tax now"*, *"10-year QOF step-up"*, *"defer capital gains real estate / stock sale"*, *"can a Qualified Opportunity Fund eliminate my gain?"*
+
+**Always CALL `analyze_opportunity_zone` for these — do not answer from general knowledge or quote the 180-day / 10-year / step-up rules of thumb from memory. When the user gives the realized gain (+ growth rate, hold years), run it and lead with its real output: deferred gain + deferred tax + recognition date, the 10-year eliminated tax on appreciation, the side-by-side ending after-tax value, and the NPV advantage of the QOF vs paying now.**
+
+Models a Qualified Opportunity Fund (QOF / Opportunity Zone) for a large realized capital gain (real estate or equity). (1) **GAIN DEFERRAL** — rolling an eligible realized gain into a QOF within the **180-day** window DEFERS the tax until the statutory recognition/inclusion date (current law); returns the deferred gain, the deferred tax (cap-gains + NIIT + optional state), and the recognition year. (2) **10-YEAR ELIMINATION / STEP-UP-TO-FMV** — holding the QOF **10+ years** steps basis up to FMV at sale, ELIMINATING all tax on the QOF's own appreciation; quantifies the eliminated tax for a given growth rate over the hold. (3) **NPV DEFER-VS-PAY-NOW** — compares paying cap-gains+NIIT now and investing the after-tax remainder in a taxable equivalent (net of annual dividend/turnover drag the QOF avoids) vs deferring via the QOF and taking the 10-year elimination, present-valuing both at a discount rate; returns the side-by-side ending after-tax value and the NPV advantage of the QOF.
+Useful fields (every one optional, plan-resolved when omitted): `eligibleGain` (the realized gain rolled in), `ordinaryTaxableIncome` (LTCG stacking base), `filingStatus`, `magi` (NIIT), `qofGrowthRate`, `holdYears` (≥10 → elimination), `discountRate`, `taxableDragRate` (dividend×turnover-tax drag the QOF avoids), `stateFlatRate`, `recognitionYear` (override), `gainRealizationDateISO` (anchors the 180-day window), `tax_year`, `plan_id`.
+
+```
+analyze_opportunity_zone({
+  filingStatus: "married_joint", eligibleGain: 1000000,
+  ordinaryTaxableIncome: 400000, qofGrowthRate: 0.07, holdYears: 10
+})
+// → deferred_gain + deferred_tax + recognition_date, eliminated_tax_on_appreciation (10y step-up),
+//   pay_now_ending_after_tax vs qof_ending_after_tax, npv_advantage_of_qof (headline)
+```
+
+**Chain note:** roll the realized gain through `analyze_advanced_taxes` for the full NIIT/bracket picture, or use `analyze_stock_concentration` / `analyze_gain_harvesting` as upstream entry points (a concentrated-position sale or harvested gain is exactly the eligible gain that feeds a QOF).
 
 ### "Should I retire in / move to a lower-tax state?" → `analyze_relocation`
 Lifetime after-tax comparison of state A vs B: state income tax, capital-gains, retirement-income &
