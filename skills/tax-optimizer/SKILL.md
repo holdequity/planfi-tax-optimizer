@@ -1,12 +1,12 @@
 ---
 name: tax-optimizer
-version: 1.8.1
+version: 1.8.2
 description: Cut taxes across accounts and years by orchestrating the public planfi MCP. Use whenever someone wants to lower their tax bill, time ISO exercises or Roth conversions, build a Roth conversion ladder, find mega-backdoor / after-tax 401(k) space, check NIIT / AMT / state surtax exposure, optimize charitable giving — bunch donations into a donor-advised fund (DAF) to clear the standard deduction, take a QCD at 70½+ that lowers AGI/IRMAA/Social-Security taxation, or give long-term appreciated stock/RSUs in-kind to avoid capital gains while still deducting FMV — realize long-term gains at the 0% capital-gains rate in a low-income year (tax-gain harvesting) — how much gain can I harvest at 0% before NIIT/IRMAA? — harvest lot-level unrealized losses to offset realized gains and up to $3,000 of ordinary income, flag wash sales, suggest replacement securities (tax-loss harvesting) — weigh retirement relocation / state-tax arbitrage — "should I retire in / move to a lower-tax state? compare the lifetime after-tax outcome of state A vs B" — check whether you qualify for the federal Saver's Credit (up to 50% of retirement contributions for lower/moderate income) — or size a 72(t)/SEPP substantially-equal-payment stream for penalty-free access to retirement money before 59½ — e.g. "how do I cut my taxes with $900k in a 401k?", "convert my IRA to Roth between 60 and 70 filling the 12% bracket — how much each year?", "how much after-tax 401(k) space do I have?", "what's the full NIIT/AMT bite on an ISO exercise?", "I'm retiring in CA but thinking about TX — how much do I keep over my lifetime?".
 ---
 
 # Tax Optimizer
 
-A thin orchestration layer over the **planfi MCP** (https://ai.planfi.app/mcp).
+A thin orchestration layer over the **planfi MCP** (https://ai.planfi.app/mcp/free).
 All tax math, brackets, and limits live server-side. This skill only gathers inputs and calls the
 tools — it does **not** compute anything locally and bakes in no defaults of its own. Read-only.
 Every tool returns a structured **`assumed_defaults[]`** array (`{ field, assumed_value, note }`)
@@ -29,10 +29,12 @@ This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_tax_o
 If they're NOT available, tell the user to connect the MCP, then continue:
 
 ```
-claude mcp add --transport http planfi https://ai.planfi.app/mcp
+claude mcp add --transport http planfi https://ai.planfi.app/mcp/free
 ```
 
-(On claude.ai: add a custom connector pointing at https://ai.planfi.app/mcp.)
+> **Try free, then add your key.** The command above adds the **free** connector — `https://ai.planfi.app/mcp/free` (no key needed). Once you create an API key, add a **new** connector with the MCP url — `https://ai.planfi.app/mcp` — and authorize it with your key.
+
+(On claude.ai: add a custom connector pointing at https://ai.planfi.app/mcp/free.)
 
 > **Access — free for personal use.** The planfi MCP is free to try (a small monthly allowance, no key needed). Heavy automated abuse forced us to add limits — but it stays **free for personal use**: email **kam@rateapi.dev** and we'll send you a free API key, no charge. (Companies and commercial use have paid plans.) To use a key, pass it as an `Authorization: Bearer pft_…` header in your MCP client config.
 
