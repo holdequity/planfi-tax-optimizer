@@ -252,8 +252,10 @@ Like every tool in this skill, `analyze_relocation` emits a structured `assumed_
 array (every state-profile fallback it applied — no-SS-tax, $0 retirement-income exclusion, default
 property rate, the 85% Social-Security convention) and a **`share_url`** when you pass `{ plan_id }`.
 Read back the `assumed_defaults[]` and offer the link. Because this is a near-retiree decision, pair
-it with the **`retirement-income`** skill (`analyze_withdrawal_strategy`, `optimize_social_security`,
-`analyze_estate_exposure`) for the full decumulation picture once the state is chosen.
+it with the **`retirement-income`** skill (`analyze_withdrawal_strategy`, `optimize_social_security`
+— now a full SSA benefit pipeline: NAWI indexing, projected bend points, COLA, and trust-fund-cut
+scenarios from an `earnings_history` — and `analyze_estate_exposure`) for the full decumulation
+picture once the state is chosen.
 
 ### "Do I qualify for the Saver's Credit?" → `analyze_savers_credit`
 The federal Saver's Credit (Retirement Savings Contributions Credit, IRC §25B): a **non-refundable**
